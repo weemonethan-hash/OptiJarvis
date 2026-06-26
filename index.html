@@ -182,7 +182,7 @@
             font-weight: 500;
         }
 
-        /* SLEEK FLOATING CONFIG MENU TRIGGER */
+        /* CONFIG MENU TOGGLE */
         .settings-toggle {
             position: fixed;
             top: 20px;
@@ -212,6 +212,8 @@
             top: 75px;
             right: -340px;
             width: 290px;
+            max-height: 80vh;
+            overflow-y: auto;
             background: rgba(8, 14, 32, 0.85);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
@@ -302,7 +304,6 @@
             box-shadow: 0 0 8px #00d2ff;
         }
 
-        /* KEYFRAME LAYER ANIMATIONS */
         @keyframes ambient-spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
@@ -322,7 +323,21 @@
 <button class="settings-toggle" id="toggle-settings-btn">Matrix Setup</button>
 
 <div class="settings-panel" id="config-panel">
-    <div class="settings-section-title">Core Processing Input</div>
+    <div class="settings-section-title">Hardware I/O Linkage</div>
+    <div class="setting-group">
+        <label for="audio-input-select">Input Device (Microphone)</label>
+        <select id="audio-input-select">
+            <option value="default">Default System Audio Capture</option>
+        </select>
+    </div>
+    <div class="setting-group">
+        <label for="audio-output-select">Output Device (Speakers)</label>
+        <select id="audio-output-select">
+            <option value="default">Default System Audio Node</option>
+        </select>
+    </div>
+
+    <div class="settings-section-title" style="margin-top: 20px;">Core Processing Input</div>
     <div class="setting-group">
         <label for="ai-model-select">Neural Model Engine</label>
         <select id="ai-model-select">
@@ -399,10 +414,13 @@
     const webSearchToggle = document.getElementById('web-search-toggle');
     const ttsProviderSelect = document.getElementById('tts-provider-select');
     const ttsVoiceSelect = document.getElementById('tts-voice-select');
+    const audioInputSelect = document.getElementById('audio-input-select');
+    const audioOutputSelect = document.getElementById('audio-output-select');
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     
     let dynamicDataBundle = "City: Dumbarton, Weather: Clear, 16C"; 
+    let activeSpeechAudio = null; // Audio instance tracking for quick cutoff interrupts
 
     // Settings Panel Toggle
     toggleSettingsBtn.addEventListener('click', () => {
@@ -410,9 +428,56 @@
         toggleSettingsBtn.textContent = configPanel.classList.contains('open') ? "Close Menu" : "Matrix Setup";
     });
 
-    // Puter Connection and Combined Geolocation/Weather Matrix Handshake on Page Load
+    // Populate Hardware Audio Devices via browser media API
+    async function refreshHardwareDevices() {
+        try {
+            // Ask for micro permission up front to reveal labels cleanly
+            await navigator.mediaDevices.getUserMedia({ audio: true });
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            
+            audioInputSelect.innerHTML = '';
+            audioOutputSelect.innerHTML = '';
+
+            devices.forEach(device => {
+                const option = document.createElement('option');
+                option.value = device.deviceId;
+                option.textContent = device.label || `${device.kind === 'audioinput' ? 'Microphone' : 'Speaker'} (${device.deviceId.slice(0,5)})`;
+                
+                if (device.kind === 'audioinput') {
+                    audioInputSelect.appendChild(option);
+                } else if (device.kind === 'audiooutput') {
+                    audioOutputSelect.appendChild(option);
+                }
+            });
+
+            if(audioInputSelect.children.length === 0) {
+                audioInputSelect.innerHTML = '<option value="default">Default Input Capture</option>';
+            }
+            if(audioOutputSelect.children.length === 0) {
+                audioOutputSelect.innerHTML = '<option value="default">Default Output Node</option>';
+            }
+        } catch (err) {
+            console.log("Hardware enumeration restricted:", err);
+        }
+    }
+
+    // Immediately stop ongoing voice outputs when required
+    function clearAssistantSpeech() {
+        if (activeSpeechAudio) {
+            try {
+                activeSpeechAudio.pause();
+                activeSpeechAudio.currentTime = 0;
+            } catch (e) {
+                console.log("Audio halt pass:", e);
+            }
+            activeSpeechAudio = null;
+        }
+    }
+
     window.addEventListener('load', async () => {
         stateIndicator.textContent = "Connecting to Puter...";
+        await refreshHardwareDevices();
+        
         try {
             if (!puter.auth.isSignedIn()) {
                 await puter.auth.signIn();
@@ -432,7 +497,7 @@
                         dynamicDataBundle = `City/Town: ${cityTown}, Weather: ${weatherData.trim()}`;
                     }
                 } catch(matrixError) {
-                    console.log("Telemetry matrix route bypassed, executing with core fallback coordinates:", matrixError);
+                    console.log("Telemetry matrix route bypassed:", matrixError);
                 }
 
                 stateIndicator.textContent = "Core Secure // Online";
@@ -461,6 +526,7 @@
 
         coreModule.addEventListener('click', async () => {
             if (!systemActive) {
+                clearAssistantSpeech();
                 systemActive = true;
                 recognition.start();
                 
@@ -469,6 +535,7 @@
             } else {
                 systemActive = false;
                 recognition.stop();
+                clearAssistantSpeech();
             }
         });
 
@@ -488,6 +555,7 @@
                 stateIndicator.className = "state-badge waiting";
                 outputDiv.textContent = "Reactor offline.";
                 clearTimeout(silenceTimer);
+                clearAssistantSpeech();
             }
         };
 
@@ -504,6 +572,11 @@
             }
 
             const liveAnalysisText = (currentFullText + interimTranscript).toLowerCase();
+
+            // CUTOFF INTERRUPT: As soon as the user starts processing new verbal speech signals, cut old output instantly
+            if (liveAnalysisText.trim().length > 0) {
+                clearAssistantSpeech();
+            }
 
             if (!isDictating) {
                 if (liveAnalysisText.includes('jarvis') || liveAnalysisText.includes('jarves') || liveAnalysisText.includes('travis') || liveAnalysisText.includes('drive')) {
@@ -524,6 +597,7 @@
         }
 
         function switchToDictationMode() {
+            clearAssistantSpeech(); // Cut voice immediately on activation trigger
             isDictating = true;
             finalPhraseCollected = "";
             outputDiv.textContent = "Awaiting input stream...";
@@ -549,14 +623,24 @@
 
         async function speakWithPuter(textToSpeak) {
             try {
-                // Read voice configurations dynamically from input selectors
+                clearAssistantSpeech(); // Clear any zombie audio track before initiating a brand new one
+
                 const selectedProvider = ttsProviderSelect.value;
                 const selectedVoice = ttsVoiceSelect.value;
+                const targetOutputDeviceId = audioOutputSelect.value;
 
                 const audio = await puter.ai.txt2speech(textToSpeak, {
                     provider: selectedProvider,
                     voice: selectedVoice
                 });
+                
+                activeSpeechAudio = audio;
+
+                // Route audio directly to the customized output device choice if set
+                if (targetOutputDeviceId && targetOutputDeviceId !== 'default' && typeof audio.setSinkId === 'function') {
+                    await audio.setSinkId(targetOutputDeviceId);
+                }
+
                 audio.play();
             } catch (ttsError) {
                 console.error("TTS Node Fault:", ttsError);
@@ -579,16 +663,10 @@
             conversationHistory.push({ role: "user", content: spokenText });
 
             try {
-                // Dynamically fetch options configured in settings UI
                 const activeModel = aiModelSelect.value;
                 const isSearchEnabled = webSearchToggle.checked;
 
-                // Build execution schema flags
-                const chatOptions = {
-                    model: activeModel
-                };
-
-                // Inject the native web search tool if toggled on
+                const chatOptions = { model: activeModel };
                 if (isSearchEnabled) {
                     chatOptions.tools = [{ type: "web_search" }];
                 }

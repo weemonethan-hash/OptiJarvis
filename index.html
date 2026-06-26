@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JARVIS System Interface</title>
+    <script src="https://js.puter.com/v2/"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #050814;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        /* CENTRAL INTERACTIVE HOLO-CORE */
+        .core-container {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 300px;
+            height: 300px;
+            margin-bottom: 20px;
+            cursor: pointer;
+        }
+
+        .arc-reactor {
+            position: absolute;
+            width: 160px;
+            height: 160px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(0, 210, 255, 0.15) 0%, transparent 70%);
+            border: 2px dashed rgba(0, 210, 255, 0.4);
+            box-shadow: 0 0 30px rgba(0, 210, 255, 0.2), inset 0 0 30px rgba(0, 210, 255, 0.2);
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: ambient-spin 20s linear infinite;
+        }
+
+        .inner-ring {
+            position: absolute;
+            width: 110px;
+            height: 110px;
+            border-radius: 50%;
+            border: 4px solid transparent;
+            border-top-color: #00d2ff;
+            border-bottom-color: #00d2ff;
+            box-shadow: 0 0 15px rgba(0, 210, 255, 0.5);
+            transition: all 0.4s ease;
+            animation: inner-spin 4s linear infinite reverse;
+        }
+
+        .center-node {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: #00a8ff;
+            box-shadow: 0 0 25px #00d2ff, 0 0 50px rgba(0, 210, 255, 0.6);
+            transition: all 0.3s ease;
+        }
+
+        /* REACTIVE STATE LOGIC VIA CLASSES */
+        .core-container.recording .arc-reactor {
+            width: 230px;
+            height: 230px;
+            border: 3px dashed #ffa502;
+            background: radial-gradient(circle, rgba(255, 165, 2) 0%, transparent 75%);
+            box-shadow: 0 0 50px rgba(255, 165, 2, 0.4), inset 0 0 40px rgba(255, 165, 2, 0.3);
+            animation: ambient-spin 6s linear infinite;
+        }
+
+        .core-container.recording .inner-ring {
+            width: 160px;
+            height: 160px;
+            border-top-color: #ffa502;
+            border-bottom-color: #ffa502;
+            box-shadow: 0 0 25px rgba(255, 165, 2, 0.7);
+            animation: inner-spin 1.5s linear infinite;
+        }
+
+        .core-container.recording .center-node {
+            background: #ffa502;
+            box-shadow: 0 0 35px #ffa502, 0 0 70px rgba(255, 165, 2, 0.8);
+        }
+
+        .core-container.thinking .arc-reactor {
+            width: 180px;
+            height: 180px;
+            border: 2px solid #00ff88;
+            box-shadow: 0 0 40px rgba(0, 255, 136, 0.5);
+            animation: pulse-glow 1s ease-in-out infinite alternate;
+        }
+
+        .core-container.thinking .inner-ring {
+            width: 130px;
+            height: 130px;
+            border-left-color: #00ff88;
+            border-right-color: #00ff88;
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.6);
+            animation: inner-spin 0.8s linear infinite;
+        }
+
+        .core-container.thinking .center-node {
+            background: #00ff88;
+            box-shadow: 0 0 30px #00ff88;
+        }
+
+        /* TEXT AND ACCESSORY INTERFACES */
+        .dashboard {
+            text-align: center;
+            max-width: 500px;
+            width: 90%;
+            z-index: 10;
+        }
+
+        h2 {
+            margin: 0 0 5px 0;
+            color: #00d2ff;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            font-size: 1.4rem;
+            text-shadow: 0 0 10px rgba(0, 210, 255, 0.3);
+        }
+
+        .state-badge {
+            display: inline-block;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+            transition: all 0.3s ease;
+        }
+        .waiting { background: rgba(30, 45, 90, 0.4); color: #8a9fc4; border-color: #1e2d5a; }
+        .recording-badge { background: rgba(255, 165, 2, 0.2); color: #ffa502; border-color: #ffa502; }
+        .thinking-badge { background: rgba(0, 255, 136, 0.2); color: #00ff88; border-color: #00ff88; }
+
+        .display-panel {
+            background: rgba(17, 25, 46, 0.55);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(30, 45, 90, 0.5);
+            border-radius: 12px;
+            padding: 15px;
+            margin-top: 15px;
+            text-align: left;
+            min-height: 50px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        .panel-title {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            color: #536f99;
+            margin-bottom: 6px;
+            letter-spacing: 1px;
+            font-weight: bold;
+        }
+
+        .output-text {
+            font-size: 1rem;
+            color: #e0e6ed;
+            line-height: 1.4;
+        }
+
+        #ai-output {
+            color: #00d2ff;
+            font-weight: 500;
+        }
+
+        /* KEYFRAME LAYER ANIMATIONS */
+        @keyframes ambient-spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        @keyframes inner-spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        @keyframes pulse-glow {
+            0% { transform: scale(0.96); opacity: 0.8; }
+            100% { transform: scale(1.04); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="core-container" id="core-module">
+    <div class="arc-reactor">
+        <div class="inner-ring"></div>
+        <div class="center-node"></div>
+    </div>
+</div>
+
+<div class="dashboard">
+    <h2 id="system-headline">JARVIS Core Terminal</h2>
+    <div id="state-indicator" class="state-badge waiting">Awaiting Handshake</div>
+
+    <div class="display-panel">
+        <div class="panel-title">Uplink Feed</div>
+        <div id="transcript-output" class="output-text">Tap the Core to initialize matrix interface...</div>
+    </div>
+
+    <div class="display-panel" style="border-color: rgba(0, 210, 255, 0.3);">
+        <div class="panel-title" style="color: #00d2ff;">Response Node</div>
+        <div id="ai-output" class="output-text">Standing by.</div>
+    </div>
+</div>
+
+<script>
+    const coreModule = document.getElementById('core-module');
+    const systemHeadline = document.getElementById('system-headline');
+    const outputDiv = document.getElementById('transcript-output');
+    const aiOutputDiv = document.getElementById('ai-output');
+    const stateIndicator = document.getElementById('state-indicator');
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    
+    // Telemetry storage nodes
+    let dynamicDataBundle = "City: Dumbarton, Weather: Clear, 16C"; 
+
+    // Puter Connection and Combined Geolocation/Weather Matrix Handshake on Page Load
+    window.addEventListener('load', async () => {
+        stateIndicator.textContent = "Connecting to Puter...";
+        try {
+            if (!puter.auth.isSignedIn()) {
+                await puter.auth.signIn();
+            }
+            if (puter.auth.isSignedIn()) {
+                stateIndicator.textContent = "Syncing Environmental Feeds...";
+                
+                try {
+                    // 1. Fetch precise city/town network location details
+                    const geoResponse = await fetch('http://ip-api.com/json/');
+                    const geoData = await geoResponse.json();
+                    
+                    if(geoData && geoData.status === 'success') {
+                        const cityTown = geoData.city || geoData.regionName || "Dumbarton";
+                        
+                        // 2. Query instant plain-text weather profiles corresponding to city lookup
+                        const weatherResponse = await fetch(`https://wttr.in/${encodeURIComponent(cityTown)}?format=%C+%t`);
+                        const weatherData = await weatherResponse.text();
+                        
+                        dynamicDataBundle = `City/Town: ${cityTown}, Weather: ${weatherData.trim()}`;
+                    }
+                } catch(matrixError) {
+                    console.log("Telemetry matrix route bypassed, executing with core fallback coordinates:", matrixError);
+                }
+
+                stateIndicator.textContent = "Core Secure // Online";
+                outputDiv.textContent = "Click the central reactor to boot Jarvis.";
+            }
+        } catch (authError) {
+            console.error(authError);
+            stateIndicator.textContent = "Auth Refused";
+        }
+    });
+
+    if (!SpeechRecognition) {
+        stateIndicator.textContent = "Driver Error";
+        outputDiv.textContent = "Speech API missing. Use Chrome or Edge browsers.";
+    } else {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true; 
+        recognition.lang = 'en-US';
+
+        let systemActive = false;
+        let isDictating = false;
+        let silenceTimer = null;
+        let finalPhraseCollected = "";
+        let conversationHistory = [];
+
+        coreModule.addEventListener('click', async () => {
+            if (!systemActive) {
+                systemActive = true;
+                recognition.start();
+                
+                // ENHANCED BUNDLE: Delivers combined location + environment data on tap completely invisibly
+                const trackingPayload = `SAVE THIS FOR LATER -- ${dynamicDataBundle} -- REPLY WITH 00 IF UNDERSTOOD`;
+                await processWithJarvisCore(trackingPayload, true);
+            } else {
+                systemActive = false;
+                recognition.stop();
+            }
+        });
+
+        recognition.onstart = () => {
+            systemActive = true;
+            systemHeadline.textContent = "JARVIS Matrix Live";
+            switchToKeywordMode();
+        };
+
+        recognition.onend = () => {
+            if (systemActive) {
+                try { recognition.start(); } catch(e) {}
+            } else {
+                systemHeadline.textContent = "JARVIS Core Terminal";
+                coreModule.className = "core-container";
+                stateIndicator.textContent = "System Standby";
+                stateIndicator.className = "state-badge waiting";
+                outputDiv.textContent = "Reactor offline.";
+                clearTimeout(silenceTimer);
+            }
+        };
+
+        recognition.onresult = (event) => {
+            let interimTranscript = '';
+            let currentFullText = '';
+
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    currentFullText += event.results[i][0].transcript;
+                } else {
+                    interimTranscript += event.results[i][0].transcript;
+                }
+            }
+
+            const liveAnalysisText = (currentFullText + interimTranscript).toLowerCase();
+
+            if (!isDictating) {
+                if (liveAnalysisText.includes('jarvis') || liveAnalysisText.includes('jarves') || liveAnalysisText.includes('travis') || liveAnalysisText.includes('drive')) {
+                    switchToDictationMode();
+                }
+            } else {
+                finalPhraseCollected = currentFullText || interimTranscript;
+                outputDiv.textContent = finalPhraseCollected || "Listening...";
+                resetSilenceTimer();
+            }
+        };
+
+        function switchToKeywordMode() {
+            isDictating = false;
+            coreModule.className = "core-container"; 
+            stateIndicator.textContent = "Monitoring Hotword 'Jarvis'";
+            stateIndicator.className = "state-badge waiting";
+        }
+
+        function switchToDictationMode() {
+            isDictating = true;
+            finalPhraseCollected = "";
+            outputDiv.textContent = "Awaiting input stream...";
+            coreModule.className = "core-container recording"; 
+            stateIndicator.textContent = "Capturing Uplink Data";
+            stateIndicator.className = "state-badge recording-badge";
+            resetSilenceTimer();
+        }
+
+        function resetSilenceTimer() {
+            clearTimeout(silenceTimer);
+            silenceTimer = setTimeout(() => {
+                if (isDictating) {
+                    if (finalPhraseCollected.trim()) {
+                        switchToKeywordMode();
+                        processWithJarvisCore(finalPhraseCollected.trim(), false);
+                    } else {
+                        resetSilenceTimer();
+                    }
+                }
+            }, 2500); 
+        }
+
+        async function speakWithPuter(textToSpeak) {
+            try {
+                const audio = await puter.ai.txt2speech(textToSpeak, {
+                    provider: 'xai',
+                    voice: 'rex'
+                });
+                audio.play();
+            } catch (ttsError) {
+                console.error("TTS Node Fault:", ttsError);
+            }
+        }
+
+        async function processWithJarvisCore(spokenText, isSilentHandshake = false) {
+            if (!isSilentHandshake) {
+                coreModule.className = "core-container thinking"; 
+                stateIndicator.textContent = "Syncing Neural Network";
+                stateIndicator.className = "state-badge thinking-badge";
+                aiOutputDiv.textContent = "Querying serverless nodes...";
+            }
+
+            const configurationSystemPrompt = `You are jarvis you are working when asked a question you will answer as simple as you can DO NO ASK question UNLESS THEY NEED A FOLLOW UP eg. whats the time - answer 'current time sir' DO not say is there anything else LINK before chats unless it is a diffent topic use sir. If you do not undederstand somthing or got it wrong apoligise, If you are asking a follow up question, append '--' to the very end of your response. MAKE SURE ALL REPLYS ARE AS SHORT AS THE CAN BE`;
+
+            if (conversationHistory.length === 0) {
+                conversationHistory.push({ role: "system", content: configurationSystemPrompt });
+            }
+            conversationHistory.push({ role: "user", content: spokenText });
+
+            try {
+                const aiResponseObj = await puter.ai.chat(conversationHistory, {
+                    model: 'gpt-5.4-nano'
+                });
+
+                let aiReply = "";
+                if (typeof aiResponseObj === 'string') {
+                    aiReply = aiResponseObj;
+                } else if (aiResponseObj && aiResponseObj.message && typeof aiResponseObj.message.content === 'string') {
+                    aiReply = aiResponseObj.message.content;
+                } else if (aiResponseObj && typeof aiResponseObj.toString === 'function') {
+                    aiReply = aiResponseObj.toString();
+                }
+
+                let rawReply = aiReply.trim();
+                
+                if (isSilentHandshake) {
+                    conversationHistory.push({ role: "assistant", content: rawReply });
+                    return; 
+                }
+
+                let isFollowUpTriggered = false;
+                if (rawReply.endsWith('--')) {
+                    isFollowUpTriggered = true;
+                    rawReply = rawReply.slice(0, -2).trim();
+                }
+
+                if (rawReply === "00") {
+                    rawReply = "Online and ready, sir.";
+                }
+
+                aiOutputDiv.textContent = rawReply;
+                conversationHistory.push({ role: "assistant", content: rawReply });
+                
+                await speakWithPuter(rawReply);
+
+                if (isFollowUpTriggered && systemActive) {
+                    setTimeout(() => {
+                        switchToDictationMode();
+                    }, 400);
+                }
+
+            } catch (error) {
+                console.error("AI Exception:", error);
+                if (!isSilentHandshake) aiOutputDiv.textContent = "Data retrieval fault.";
+            } finally {
+                if (systemActive && !isDictating && !coreModule.className.includes('recording')) {
+                    switchToKeywordMode();
+                }
+            }
+        }
+
+        recognition.onerror = (e) => {
+            if(e.error !== 'no-speech' && e.error !== 'audio-capture') {
+                console.log("Hardware flag handled:", e.error);
+            }
+        };
+    }
+</script>
+
+</body>
+</html>

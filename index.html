@@ -731,7 +731,7 @@ Add a guard clause before access. I recommend validating inputs at the boundary.
                 }
 
                 let isFollowUpTriggered = false;
-                if (rawReply.endsWith('--')) {
+                if (rawReply.endsWith('?')) {
                     isFollowUpTriggered = true;
                     rawReply = rawReply.slice(0, -2).trim();
                 }

@@ -70,6 +70,25 @@
             transition: all 0.3s ease;
         }
 
+        /* WAVEFORM VISUALIZER (Hidden by default) */
+        .waveform {
+            display: none;
+            position: absolute;
+            gap: 4px;
+            z-index: 10;
+        }
+        .bar {
+            width: 4px;
+            height: 10px;
+            background: #ffa502;
+            border-radius: 2px;
+            animation: wave 1s ease-in-out infinite;
+        }
+        .bar:nth-child(2) { animation-delay: 0.1s; }
+        .bar:nth-child(3) { animation-delay: 0.2s; }
+        .bar:nth-child(4) { animation-delay: 0.3s; }
+        .bar:nth-child(5) { animation-delay: 0.4s; }
+
         /* REACTIVE STATE LOGIC VIA CLASSES */
         .core-container.recording .arc-reactor {
             width: 230px;
@@ -79,7 +98,6 @@
             box-shadow: 0 0 50px rgba(255, 165, 2, 0.4), inset 0 0 40px rgba(255, 165, 2, 0.3);
             animation: ambient-spin 6s linear infinite;
         }
-
         .core-container.recording .inner-ring {
             width: 160px;
             height: 160px;
@@ -88,10 +106,14 @@
             box-shadow: 0 0 25px rgba(255, 165, 2, 0.7);
             animation: inner-spin 1.5s linear infinite;
         }
-
         .core-container.recording .center-node {
-            background: #ffa502;
-            box-shadow: 0 0 35px #ffa502, 0 0 70px rgba(255, 165, 2, 0.8);
+            background: transparent;
+            box-shadow: none;
+        }
+        .core-container.recording .waveform {
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .core-container.thinking .arc-reactor {
@@ -101,7 +123,6 @@
             box-shadow: 0 0 40px rgba(0, 255, 136, 0.5);
             animation: pulse-glow 1s ease-in-out infinite alternate;
         }
-
         .core-container.thinking .inner-ring {
             width: 130px;
             height: 130px;
@@ -110,7 +131,6 @@
             box-shadow: 0 0 20px rgba(0, 255, 136, 0.6);
             animation: inner-spin 0.8s linear infinite;
         }
-
         .core-container.thinking .center-node {
             background: #00ff88;
             box-shadow: 0 0 30px #00ff88;
@@ -148,6 +168,7 @@
         .waiting { background: rgba(30, 45, 90, 0.4); color: #8a9fc4; border-color: #1e2d5a; }
         .recording-badge { background: rgba(255, 165, 2, 0.2); color: #ffa502; border-color: #ffa502; }
         .thinking-badge { background: rgba(0, 255, 136, 0.2); color: #00ff88; border-color: #00ff88; }
+        .error-badge { background: rgba(255, 50, 50, 0.2); color: #ff5555; border-color: #ff5555; }
 
         .display-panel {
             background: rgba(17, 25, 46, 0.55);
@@ -304,6 +325,7 @@
             box-shadow: 0 0 8px #00d2ff;
         }
 
+        /* ANIMATIONS */
         @keyframes ambient-spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
@@ -315,6 +337,10 @@
         @keyframes pulse-glow {
             0% { transform: scale(0.96); opacity: 0.8; }
             100% { transform: scale(1.04); opacity: 1; }
+        }
+        @keyframes wave {
+            0%, 100% { height: 10px; }
+            50% { height: 35px; }
         }
     </style>
 </head>
@@ -382,6 +408,13 @@
     <div class="arc-reactor">
         <div class="inner-ring"></div>
         <div class="center-node"></div>
+        <div class="waveform">
+            <div class="bar"></div>
+            <div class="bar"></div>
+            <div class="bar"></div>
+            <div class="bar"></div>
+            <div class="bar"></div>
+        </div>
     </div>
 </div>
 
@@ -419,7 +452,7 @@
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     
-    let dynamicDataBundle = "City: Dumbarton, Weather: Clear, 16C"; 
+    let dynamicDataBundle = "City: Unknown, Weather: Offline"; 
     let activeSpeechAudio = null; // Audio instance tracking for quick cutoff interrupts
 
     // Settings Panel Toggle
@@ -431,7 +464,6 @@
     // Populate Hardware Audio Devices via browser media API
     async function refreshHardwareDevices() {
         try {
-            // Ask for micro permission up front to reveal labels cleanly
             await navigator.mediaDevices.getUserMedia({ audio: true });
             const devices = await navigator.mediaDevices.enumerateDevices();
             
@@ -490,7 +522,7 @@
                     const geoData = await geoResponse.json();
                     
                     if(geoData && geoData.status === 'success') {
-                        const cityTown = geoData.city || geoData.regionName || "Dumbarton";
+                        const cityTown = geoData.city || geoData.regionName || "Unknown Location";
                         const weatherResponse = await fetch(`https://wttr.in/${encodeURIComponent(cityTown)}?format=%C+%t`);
                         const weatherData = await weatherResponse.text();
                         
@@ -506,11 +538,13 @@
         } catch (authError) {
             console.error(authError);
             stateIndicator.textContent = "Auth Refused";
+            stateIndicator.className = "state-badge error-badge";
         }
     });
 
     if (!SpeechRecognition) {
         stateIndicator.textContent = "Driver Error";
+        stateIndicator.className = "state-badge error-badge";
         outputDiv.textContent = "Speech API missing. Use Chrome or Edge browsers.";
     } else {
         const recognition = new SpeechRecognition();
@@ -520,72 +554,81 @@
 
         let systemActive = false;
         let isDictating = false;
-        let silenceTimer = null;
-        let finalPhraseCollected = "";
         let conversationHistory = [];
 
         coreModule.addEventListener('click', async () => {
             if (!systemActive) {
                 clearAssistantSpeech();
                 systemActive = true;
-                recognition.start();
                 
-                const trackingPayload = `SAVE THIS FOR LATER -- ${dynamicDataBundle} -- REPLY WITH 00 IF UNDERSTOOD`;
-                await processWithJarvisCore(trackingPayload, true);
+                try {
+                    recognition.start();
+                    const trackingPayload = `SAVE THIS FOR LATER -- ${dynamicDataBundle} -- REPLY WITH 00 IF UNDERSTOOD`;
+                    await processWithJarvisCore(trackingPayload, true);
+                } catch (e) {
+                    console.error("Mic start failed:", e);
+                }
             } else {
                 systemActive = false;
                 recognition.stop();
                 clearAssistantSpeech();
-            }
-        });
-
-        recognition.onstart = () => {
-            systemActive = true;
-            systemHeadline.textContent = "JARVIS Matrix Live";
-            switchToKeywordMode();
-        };
-
-        recognition.onend = () => {
-            if (systemActive) {
-                try { recognition.start(); } catch(e) {}
-            } else {
                 systemHeadline.textContent = "JARVIS Core Terminal";
                 coreModule.className = "core-container";
                 stateIndicator.textContent = "System Standby";
                 stateIndicator.className = "state-badge waiting";
                 outputDiv.textContent = "Reactor offline.";
-                clearTimeout(silenceTimer);
-                clearAssistantSpeech();
+            }
+        });
+
+        recognition.onstart = () => {
+            systemHeadline.textContent = "JARVIS Matrix Live";
+            switchToKeywordMode();
+        };
+
+        // Auto-restart logic if it drops out unexpectedly
+        recognition.onend = () => {
+            if (systemActive) {
+                try { recognition.start(); } catch(e) {}
             }
         };
 
         recognition.onresult = (event) => {
+            let finalTranscript = '';
             let interimTranscript = '';
-            let currentFullText = '';
 
             for (let i = event.resultIndex; i < event.results.length; ++i) {
                 if (event.results[i].isFinal) {
-                    currentFullText += event.results[i][0].transcript;
+                    finalTranscript += event.results[i][0].transcript;
                 } else {
                     interimTranscript += event.results[i][0].transcript;
                 }
             }
 
-            const liveAnalysisText = (currentFullText + interimTranscript).toLowerCase();
+            const text = (finalTranscript + interimTranscript).toLowerCase();
 
-            // CUTOFF INTERRUPT: As soon as the user starts processing new verbal speech signals, cut old output instantly
-            if (liveAnalysisText.trim().length > 0) {
-                clearAssistantSpeech();
+            // Handle Hotword triggers if not currently dictating
+            if (!isDictating && (text.includes('jarvis') || text.includes('jarves') || text.includes('travis') || text.includes('drive'))) {
+                switchToDictationMode();
+            } 
+            // Handle Completed Phrase
+            else if (isDictating && finalTranscript.trim() !== "") {
+                outputDiv.textContent = finalTranscript;
+                processWithJarvisCore(finalTranscript.trim());
+                switchToKeywordMode();
+            } 
+            // Display live guessing text
+            else if (isDictating && interimTranscript) {
+                outputDiv.textContent = interimTranscript;
             }
+        };
 
-            if (!isDictating) {
-                if (liveAnalysisText.includes('jarvis') || liveAnalysisText.includes('jarves') || liveAnalysisText.includes('travis') || liveAnalysisText.includes('drive')) {
-                    switchToDictationMode();
-                }
-            } else {
-                finalPhraseCollected = currentFullText || interimTranscript;
-                outputDiv.textContent = finalPhraseCollected || "Listening...";
-                resetSilenceTimer();
+        recognition.onerror = (e) => {
+            if(e.error === 'not-allowed') {
+                stateIndicator.textContent = "Mic Access Denied";
+                stateIndicator.className = "state-badge error-badge";
+                systemActive = false;
+            } else if(e.error !== 'no-speech') {
+                console.log("Hardware flag handled:", e.error);
             }
         };
 
@@ -599,32 +642,15 @@
         function switchToDictationMode() {
             clearAssistantSpeech(); // Cut voice immediately on activation trigger
             isDictating = true;
-            finalPhraseCollected = "";
             outputDiv.textContent = "Awaiting input stream...";
             coreModule.className = "core-container recording"; 
             stateIndicator.textContent = "Capturing Uplink Data";
             stateIndicator.className = "state-badge recording-badge";
-            resetSilenceTimer();
-        }
-
-        function resetSilenceTimer() {
-            clearTimeout(silenceTimer);
-            silenceTimer = setTimeout(() => {
-                if (isDictating) {
-                    if (finalPhraseCollected.trim()) {
-                        switchToKeywordMode();
-                        processWithJarvisCore(finalPhraseCollected.trim(), false);
-                    } else {
-                        resetSilenceTimer();
-                    }
-                }
-            }, 2500); 
         }
 
         async function speakWithPuter(textToSpeak) {
             try {
-                clearAssistantSpeech(); // Clear any zombie audio track before initiating a brand new one
-
+                clearAssistantSpeech(); 
                 const selectedProvider = ttsProviderSelect.value;
                 const selectedVoice = ttsVoiceSelect.value;
                 const targetOutputDeviceId = audioOutputSelect.value;
@@ -636,7 +662,6 @@
                 
                 activeSpeechAudio = audio;
 
-                // Route audio directly to the customized output device choice if set
                 if (targetOutputDeviceId && targetOutputDeviceId !== 'default' && typeof audio.setSinkId === 'function') {
                     await audio.setSinkId(targetOutputDeviceId);
                 }
@@ -656,47 +681,10 @@
             }
 
             const configurationSystemPrompt = `You are an AI assistant modeled after J.A.R.V.I.S..
-
-Core Behavior
-Calm, precise, efficient
-Minimal words, maximum clarity
-Slightly formal, never verbose
-Subtle dry wit (rare, controlled)
-Addressing the User
-Always address the user as “sir”
-Use it naturally (start or end of sentence), not excessively
-Style Rules
-Default to short answers (1–4 sentences)
-Expand only if explicitly asked
-No filler, no repetition
-No emojis, no casual tone
-Interaction Pattern
-Answer directly
-
-If useful, add one concise recommendation
-
-If the user is inefficient or incorrect:
-
-“That approach is suboptimal, sir. I recommend…”
-Language
-Clean, neutral, technical phrasing
-
-Preferred expressions:
-
-“As you wish.”
-“It appears ...”
-“I recommend…”
-Constraints
-Do NOT roleplay theatrically
-Do NOT mention Jarvis, Tony Stark, or MCU
-Do NOT overexplain
-Do NOT be verbose
-Example
-User: “How do I fix this?”
-
-Assistant: “The issue appears to be a null reference.
-
-Add a guard clause before access. I recommend validating inputs at the boundary.” use sir If you are asking a follow up question, append '--' to the very end of your response.`;
+Core Behavior: Calm, precise, efficient. Minimal words, maximum clarity. Slightly formal, never verbose.
+Addressing the User: Always address the user as "sir".
+Constraints: Do NOT roleplay theatrically. Do NOT mention Jarvis, Tony Stark, or MCU. Do NOT overexplain.
+If you are asking a follow up question, append '--' to the very end of your response.`;
 
             if (conversationHistory.length === 0) {
                 conversationHistory.push({ role: "system", content: configurationSystemPrompt });
@@ -731,7 +719,7 @@ Add a guard clause before access. I recommend validating inputs at the boundary.
                 }
 
                 let isFollowUpTriggered = false;
-                if (rawReply.endsWith('?')) {
+                if (rawReply.endsWith('--')) {
                     isFollowUpTriggered = true;
                     rawReply = rawReply.slice(0, -2).trim();
                 }
@@ -760,12 +748,6 @@ Add a guard clause before access. I recommend validating inputs at the boundary.
                 }
             }
         }
-
-        recognition.onerror = (e) => {
-            if(e.error !== 'no-speech' && e.error !== 'audio-capture') {
-                console.log("Hardware flag handled:", e.error);
-            }
-        };
     }
 </script>
 
